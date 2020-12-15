@@ -35,6 +35,7 @@ class KalmanFilter:
         self.u_t = np.array([0., 0.])
         self.F = np.identity(3)
         self.P = 1000 * np.identity(3)
+        self.B = np.identity(2)
         self.H = np.identity(3)
         # dh/dx
         self.Jhx = np.identity(3)
@@ -55,7 +56,9 @@ class KalmanFilter:
         predicted_covariance - a 3 by 3 numpy array of the prediction of the
             covariance
         """
-
+		self.x_t = self.F * self.x_t + self.B * v
+		self.P = self.F * self.P * np.transpose(self.P) + self.Q_t
+		
         return
 
     def update(self, z_t):
