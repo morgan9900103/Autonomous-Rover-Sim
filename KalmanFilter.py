@@ -25,20 +25,15 @@ class KalmanFilter:
             unique id to identify which one you are seeing at any given
             moment
         """
-        # TODO: initialize these parameters
-        self.markers = markers
-        self.last_time = None  # Used to keep track of time between measurements
-        self.Q_t = np.identity(2)
-        self.R_t = np.identity(3)
-        # x_t - [x, y, theta]
-        self.x_t = np.zeros((3, 1))
-        self.u_t = np.array([0., 0.])
-        self.F = np.identity(3)
-        self.P = 1000 * np.identity(3)
-        self.B = np.identity(2)
-        self.H = np.identity(3)
-        # dh/dx
-        self.Jhx = np.identity(3)
+		
+		self.markers = markers
+		self.last_time = 0.0
+		self.Q_t = np.eye(2)
+		self.R_t = np.eye(3)
+		
+		self.x_t = np.array([[0.345], [0.345], [1.570796]])
+		self.x_t_prediction = np.array([[0], [0], [0]])
+		self.P_t = 1000 * eye(3)
 
     def prediction(self, v, imu_meas, dt):
         """
