@@ -35,7 +35,7 @@ class KalmanFilter:
 		self.x_t_prediction = np.array([[0], [0], [0]])
 		self.P_t = 1000 * eye(3)
 
-    def prediction(self, v, imu_meas, dt):
+    def prediction(self, v, imu_meas):
         """
         Performs the prediction step on the state x_t and covariance P_t
         Inputs:
@@ -51,8 +51,16 @@ class KalmanFilter:
         predicted_covariance - a 3 by 3 numpy array of the prediction of the
             covariance
         """
-		self.x_t = self.F * self.x_t + self.B * v
-		self.P = self.F * self.P * np.transpose(self.P) + self.Q_t
+		dt = imu_meas[4, 0] - self.last_time
+		omega = v[1]
+		self.last_time = imu_meas[4, 0]
+		G = np.eye[3] + dt * np.array([[0, 0, -v[0] * np.sin(self.x_t[2, 0])],
+										[0, 0, v[0] * np.cos(self.x_t[2, 0])],
+										[0, 0, 0]])
+		N = dt * np.array([[-np.sin(self.x_t[2, 0]), 0], [np.cos(self.x_t[2, 0])], [omega]])
+		self.x_t_prediction = self.x_t + dt * np.array([[v[0] * np.cos(self.x_t[2, 0])], [v[0] * np.sin(self.x_t[2, 0])], [omega])
+		
+		self.P_t_rediction = (G.dot(self.P_t)).dot(np.transpose(G)) + (N.dot(self.Q_t)).dot(np.transpose(N))
 		
         return
 
@@ -70,22 +78,47 @@ class KalmanFilter:
         predicted_state - a 3 by 1 numpy array of the updated state
         predicted_covariance - a 3 by 3 numpy array of the updated covariance
         """
-        if z_t is not None:
-            # Transformation for AprilTag to get measured robot pose wrt world frame
-            tag_pose_world = tag_pos(self.markers, z_t[3])
-            # z - robot pose wrt world
-            robot_pose_world = robot_pos(tag_pose_world, z_t[:3])
-            # y = z - HX
-            y = robot_pose_world - self.x_t
-            # S
-            S = np.dot(np.dot(self.Jhx, self.P), np.transpose(self.Jhx)) + self.R_t
-            # Kalman gain
-            K = np.dot(np.dot(self.P, self.Jhx), np.linalg.inv(S))
-            # X = X + Ky
-            self.x_t = self.x_t + np.dot(K, y)
-            # P = (I - KH)P
-            self.P = np.dot(np.eye(3) - np.dot(K, self.Jhx), self.P)
+      	
+      	H = np.eye(3)
+		K = (self.P_t_prediction.dot(np.transpose(H))).dot(inv((H.dot(self.P_t_prediction)).dot(np.transpose(H)) + self.R_t)
+		
+		if z_t != None and z_t != []:
+			for tag in z_t:
+				# retrieve pose of the tag in world frame from the map(markers)
+				tag_w_pose = self.tag_pose(tag[3])
+				# pose of the tag as measured from the robot
+				tag_r_pose = tag[:3]
+				# pose of the robot in the world frame
+				robot_pose = self.robot_pos(tag_w_pose, tag_r_pose)
+				
+				self.x_t = self.x_t_prediction + K.dot(robot_pose - self.x_t_prediction)
+		else:
+			self.x_t = self.x_t_prediction
+		
+		self.P_t = self.P_t_prediction - (K.dot(H)).dot(self.P_t_prediction)
+      	
         return
+    
+    def robot_pos(self, w_pos, r_pos):
+    	H_w = np.array([[math.cos(w_pos[2]), -math.sin(w_pos[2]), w_pos[0]],
+    					[math.sin(w_pos[2]), math.cos(w_pos[2]), w_pos[1]],
+    					[0, 0, 1]])
+    	H_r = np.array([[math.cos(r_pos[2]), -math.sin(r_pos[2]), r_pos[0]],
+    					[math.sin(r_pos[2]), math.cos(r_pos[2]), r_pos[1]],
+    					[0, 0, 1]])
+    	
+    	w_r = H_w.dot(inv(H_r))
+    	robot_pose = np.array([[w_r[0, 2]], [w_r[1, 2]], [math.atan2(2_r[1, 0], w_r[0, 0])]])
+    	
+    	return robot_pose
+    	
+    def tag_pose(self, marker_id):
+    	for i in range(len(self.markers)):
+    		marker_i = np.copy(self.markers[i])
+    		if marker_i[3] == marker_id:
+    			return marker_i[0:3]
+    	
+    	return None
 
     def step_filter(self, v, imu_meas, z_t):
         """
@@ -98,6 +131,11 @@ class KalmanFilter:
         Outputs:
         x_t - current estimate of the state
         """
-        # YOUR CODE HERE
+        if np.all(imu_meas != None) and imu_meas.shape == (5, 1):
+        	if self.last_time == None:
+        		self.last_time = imu_meas[4, 0]
+        	else:
+        		self.prediction(v, imu_meas)
+        		self.update(z_t)
 
         return self.x_t
